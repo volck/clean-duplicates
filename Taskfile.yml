@@ -1,0 +1,74 @@
+version: '3'
+
+
+tasks:
+  build:
+    desc: "Build the Go binary"
+    cmds:
+      - go build -v . 
+      - stat clean-duplicates
+
+
+  run-init:
+    desc: "Run the init subprogram"
+    deps: [build]
+    cmds:
+      - go run . init 
+
+
+  no-test-recreate-search-test:
+    desc: "Run the search subprogram without recreating testdata"
+    deps: [clean-db,run-init]
+    cmds:
+      - go run . search --path testfolder/
+
+  test-recreate-run-search:
+    desc: "Run the search subprogram"
+    deps: [run-init, init-test-data]
+    cmds:
+      - go run . search --path testfolder/
+
+  run-analyze:
+    desc: "Run the analyze subcommand"
+    deps: [run-search-test]
+    cmds:
+      - go run . analyze -l 
+
+  test:
+    desc: "Run tests"
+    cmds:
+      - go test ./...
+    sources:
+      - "**/*.go"
+    generates:
+      - "**/*.coverprofile"
+
+  clean-db:
+    desc: "clean up test files"
+    cmds:
+      - rm -rfv  ~/.config/clean-duplicate*
+      - rm -v clean-duplicates
+
+  clean-all:
+    desc: "clean up test files"
+    cmds:
+      - rm -rfv testfolder/*
+      - rm -rfv  ~/.config/clean-duplicate*
+      - rm -v clean-duplicates
+
+  lint:
+    desc: "Run linters"
+    cmds:
+      - golangci-lint run
+    preconditions:
+      - command: golangci-lint
+
+  install-tools:
+    desc: "Install necessary development tools"
+    cmds:
+      - go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+
+  init-test-data:
+   desc: "create and run test files"
+   cmds:
+      - ./gentest.sh      
