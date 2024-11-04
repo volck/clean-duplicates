@@ -32,27 +32,19 @@ var searchCmd = &cobra.Command{
 			internal.Ntfy("clean-duplicates started search", ntfyStartMsg)
 		}
 
+		writerChan := make(chan internal.File, 20)
+		writer := internal.NewWriter(writerChan)
+
+		calculateChan := make(chan string, 100)
+		calculator := internal.NewCalculator(calculateChan)
+
+		dispatcher := internal.NewDispatcher(*writer, *calculator)
+
 		for _, path := range paths {
-			internal.FindFiles(path)
+
+			dispatcher.FindFiles(path)
+
 		}
-
-		internal.Logger.Info("done finding files")
-		var Files = make(chan internal.File, internal.NumberOfFiles)
-
-		internal.Logger.Info("found files", slog.Any("length of files", len(internal.PathsFound)))
-
-		db, err := internal.OpenDb()
-		if err != nil {
-			internal.Logger.Info("error opening db", slog.Any("err", err))
-		}
-		internal.Logger.Info("db stats", slog.Int("inuse", db.Stats().InUse), slog.Any("ping", db.Ping()))
-
-		for _, f := range internal.PathsFound {
-			internal.Wg.Add(1)
-			go internal.CalculateFile(f, db)
-		}
-
-		close(Files)
 
 		after := time.Since(t)
 		internal.Logger.Info("clean-duplicates finished", slog.Any("runtime", after))
