@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sync"
 )
 
 type Writer struct {
@@ -17,14 +18,12 @@ func NewWriter(writerChan chan File) *Writer {
 
 }
 
-func (w *Writer) Listen() {
+func (w *Writer) Listen(inChan <-chan File, wg *sync.WaitGroup) {
+	defer wg.Done()
 	Logger.Info("writer listening")
-	for {
-		select {
-		case f := <-w.WriteChan:
-			Logger.Info("received file", slog.Any("file", f))
-			//w.InsertFile(f)
-		}
+	for file := range inChan {
+		Logger.Info("writer recieved file", slog.Any("file", file))
+
 	}
 }
 
@@ -75,6 +74,7 @@ func (w *Writer) OpenDb() (*sqlx.DB, error) {
 }
 
 func (w *Writer) InsertFile(db *sqlx.DB, f *File) error {
+	defer Wg.Done()
 	_, err := db.Exec("INSERT INTO files (path, hash) VALUES (?, ?)", f.FilePath, f.MD5Hash)
 	if err != nil {
 		Logger.Error("could not insert file", slog.Any("error", err))
