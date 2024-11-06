@@ -1,5 +1,9 @@
 version: '3'
 
+vars:
+  NUM_FILES: '{{default 1 .NUM_FILES}}'
+
+
 
 tasks:
   build:
@@ -71,4 +75,8 @@ tasks:
   init-test-data:
    desc: "create and run test files"
    cmds:
-      - ./gentest.sh      
+      - ./gentest.sh {{.NUM_FILES}}
+
+
+
+

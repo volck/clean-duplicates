@@ -1,12 +1,14 @@
 package internal
 
 import (
+	"database/sql"
 	"fmt"
-	sqlx "github.com/jmoiron/sqlx"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
+
+	sqlx "github.com/jmoiron/sqlx"
 )
 
 type Writer struct {
@@ -20,11 +22,27 @@ func NewWriter(writerChan chan File) *Writer {
 
 func (w *Writer) Listen(inChan <-chan File, wg *sync.WaitGroup) {
 	defer wg.Done()
-	Logger.Info("writer listening")
-	for file := range inChan {
-		Logger.Info("writer recieved file", slog.Any("file", file))
 
+	db, err := w.OpenDb()
+	if err != nil {
+		Logger.Error("could not open database", slog.Any("error", err))
 	}
+	Logger.Info("writer listening")
+	counter := 0
+	for file := range inChan {
+		counter++
+		Logger.Info("writer recieved file", slog.Any("file", file), slog.Int("counter", counter))
+		exists, err := w.FileAlreadyChecked(db, file.FilePath)
+		if err != nil {
+			Logger.Error("could not check if file exists", slog.Any("error", err))
+		}
+		if !exists {
+			w.InsertFile(db, &file)
+		} else {
+			Logger.Info("file already exists", slog.Any("file", file))
+		}
+	}
+	Logger.Info("writer done")
 }
 
 func (w *Writer) InitDB() {
@@ -34,11 +52,16 @@ func (w *Writer) InitDB() {
 
 	// exec the schema or fail; multi-statement Exec behavior varies between
 	// database drivers;  pq will exec them all, sqlite3 won't, ymmv
+
 	_, err := db.Exec(Schema)
 	if err != nil {
 		Logger.Error("failed to exec", slog.Any("error", err))
 	}
-
+	res, err := db.Exec("PRAGMA table_info(files)")
+	if err != nil {
+		Logger.Error("could not describe files", slog.Any("error", err))
+	}
+	Logger.Info("describe files", slog.Any("res", res))
 }
 
 func (w *Writer) makeDb() (db *sqlx.DB) {
@@ -74,26 +97,27 @@ func (w *Writer) OpenDb() (*sqlx.DB, error) {
 }
 
 func (w *Writer) InsertFile(db *sqlx.DB, f *File) error {
-	defer Wg.Done()
-	_, err := db.Exec("INSERT INTO files (path, hash) VALUES (?, ?)", f.FilePath, f.MD5Hash)
+	res, err := db.Exec("INSERT INTO files (file_path, hash) VALUES (?, ?)", f.FilePath, f.MD5Hash)
 	if err != nil {
 		Logger.Error("could not insert file", slog.Any("error", err))
 	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		Logger.Error("could not get rows affected", slog.Any("error", err))
+	}
+
+	Logger.Info("inserted file", slog.Any("rowsAffected", rowsAffected))
 	return err
 }
 
-func (w *Writer) FileAlreadyChecked(path string) (bool, error) {
+func (w *Writer) FileAlreadyChecked(db *sqlx.DB, path string) (bool, error) {
 
-	db, err := w.OpenDb()
-	if err != nil {
-		Logger.Error("error", slog.Any("error", err))
-	}
-	query := "SELECT 1 FROM files WHERE path = ? LIMIT 1"
+	query := "SELECT 1 FROM files WHERE file_path = ? LIMIT 1"
 
 	var exists bool
-	err = db.QueryRow(query, path).Scan(&exists)
-	if err != nil {
-		Logger.Error("could not query db", slog.Any("error", err))
+	err := db.QueryRow(query, path).Scan(&exists)
+	if err == sql.ErrNoRows {
+		return false, nil
 	}
 	return exists, err
 }
@@ -122,6 +146,17 @@ ORDER BY f1.md5_hash, f1.filename
 
 }
 
-func (w *Writer) Writer() {
+func (w *Writer) DeleteDb() {
 
+	usercfgdir, err := os.UserConfigDir()
+	if err != nil {
+		Logger.Error("could not get user cfg dir")
+	}
+
+	dbName := filepath.Join(usercfgdir, "clean-duplicate", "clean-duplicate.db")
+	err = os.Remove(dbName)
+	if err != nil {
+		Logger.Error("could not delete db", slog.Any("error", err))
+	}
+	Logger.Info("deleted db")
 }

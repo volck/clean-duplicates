@@ -1,9 +1,14 @@
 #!/bin/bash
 
 
-for i in {1..200}; do
+echo "creating $1 files"
+
+NUMFILES=$1
+
+
+for i in $(seq $NUMFILES); do
   echo $i 
   size=$((RANDOM % 10 + 1))
-  dd if=/dev/urandom of=testfolder/file$i bs=10M count=$size
+  dd if=/dev/urandom of=testfolder/$(uuidgen) bs=100M count=$size
 done
 

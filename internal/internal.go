@@ -35,7 +35,6 @@ func walkFunc(path string, info os.DirEntry, err error) error {
 }
 
 func calculateHash(filePath string) (md5sum *[]byte, err error) {
-	Logger.Info("calculating hash", slog.Any("path", filePath))
 	file, err := os.Open(filePath)
 	if err != nil {
 		Logger.Error("error opening file", slog.Any("error", err))

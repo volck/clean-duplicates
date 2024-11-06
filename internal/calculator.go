@@ -17,25 +17,20 @@ func NewCalculator(thechan chan string) *Calculator {
 
 func (c *Calculator) Listen(inChan chan<- string, outChan chan<- File, wg *sync.WaitGroup) {
 	defer wg.Done()
-	Logger.Info("calculator listening")
-	Logger.Info("calculator sent test file")
-	for {
-		for ch := range c.CalculateChan {
-			Logger.Info("calculator recieved path", slog.Any("path", ch))
-			outChan <- File{FilePath: ch}
-		}
+	for ch := range c.CalculateChan {
+		wg.Add(1)
+		go c.CalculateHash(ch, outChan, wg)
 	}
+	Logger.Info("calculator done")
 }
 
-func (c *Calculator) CalculateHash(path string) {
-	Logger.Info("calculator started", slog.Any("path", path))
+func (c *Calculator) CalculateHash(path string, outChan chan<- File, wg *sync.WaitGroup) {
+	defer wg.Done()
 	theHash, err := calculateHash(path)
 	if err != nil {
 		Logger.Error("could not calculate hashes", slog.Any("error", err))
 	}
 	md5Hash := fmt.Sprintf("%x", *theHash)
 	f := File{FilePath: path, MD5Hash: md5Hash}
-	Logger.Info("calculator stopped", slog.Any("hash", md5Hash))
-	c.Writer.WriteChan <- f
-
+	outChan <- f
 }
