@@ -2,6 +2,7 @@ package internal_test
 
 import (
 	internal "clean-duplicates/internal"
+	"runtime"
 	"sync"
 	"testing"
 )
@@ -13,7 +14,9 @@ func TestWorkFlow(t *testing.T) {
 	writer := internal.NewWriter(writerChan)
 	writer.DeleteDb()
 	writer.InitDB()
-	calculateChan := make(chan string, 10)
+
+	totalCPUs := runtime.NumCPU()
+	calculateChan := make(chan string, totalCPUs)
 	calculator := internal.NewCalculator(calculateChan)
 
 	dispatcher := internal.NewDispatcher(*writer, *calculator)
