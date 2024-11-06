@@ -55,7 +55,6 @@ func calculateHash(filePath string) (md5sum *[]byte, err error) {
 
 	}
 
-	Logger.Info("calculated hash", slog.Any("hash", theHash))
 	return &theHash, nil
 
 }
