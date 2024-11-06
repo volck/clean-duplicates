@@ -32,15 +32,7 @@ func (w *Writer) Listen(inChan <-chan File, wg *sync.WaitGroup) {
 	for file := range inChan {
 		filecounter++
 		Logger.Info("writer got file", slog.Any("file", file), slog.Int("filecounter", filecounter))
-		exists, err := w.FileAlreadyChecked(db, file.FilePath)
-		if err != nil {
-			Logger.Error("could not check if file exists", slog.Any("error", err))
-		}
-		if !exists {
-			w.InsertFile(db, &file)
-		} else {
-			Logger.Info("file already exists", slog.Any("file", file))
-		}
+		w.InsertFile(db, &file)
 	}
 	Logger.Info("writer done")
 }
@@ -89,7 +81,7 @@ func (w *Writer) OpenDb() (*sqlx.DB, error) {
 }
 
 func (w *Writer) InsertFile(db *sqlx.DB, f *File) error {
-	res, err := db.Exec("INSERT INTO files (file_path, hash) VALUES (?, ?)", f.FilePath, f.MD5Hash)
+	res, err := db.Exec("INSERT OR IGNORE INTO files (file_path, hash) VALUES (?, ?)", f.FilePath, f.MD5Hash)
 	if err != nil {
 		Logger.Error("could not insert file", slog.Any("error", err))
 	}
@@ -117,15 +109,18 @@ func (w *Writer) FileAlreadyChecked(db *sqlx.DB, path string) (bool, error) {
 func (w *Writer) GetDuplicates() []File {
 
 	db, err := OpenDb()
-	query := `SELECT f1.id, f1.filename, f1.file_path, f1.md5_hash
+	if err != nil {
+		Logger.Error("could not open database", slog.Any("error", err))
+	}
+	query := `SELECT f1.id, f1.file_path, f1.hash
 FROM files f1
 INNER JOIN (
-    SELECT md5_hash
+    SELECT hash
     FROM files
-    GROUP BY md5_hash
+    GROUP BY hash
     HAVING COUNT(*) > 1
-) f2 ON f1.md5_hash = f2.md5_hash
-ORDER BY f1.md5_hash, f1.filename
+) f2 ON f1.hash = f2.hash
+ORDER BY f1.hash, f1.file_path;
 `
 
 	var files []File
