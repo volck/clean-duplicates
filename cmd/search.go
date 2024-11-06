@@ -6,17 +6,17 @@ package cmd
 import (
 	"clean-duplicates/internal"
 	"fmt"
-	"log/slog"
-	"time"
-
-	//	"time"
-
 	"github.com/spf13/cobra"
+	"log/slog"
+	"runtime"
+	"sync"
+	"time"
 )
 
 var (
-	paths []string
-	ntfy  bool
+	paths     []string
+	ntfy      bool
+	initNewDb bool
 )
 
 // searchCmd represents the search command
@@ -32,19 +32,25 @@ var searchCmd = &cobra.Command{
 			internal.Ntfy("clean-duplicates started search", ntfyStartMsg)
 		}
 
+		var wg sync.WaitGroup
 		writerChan := make(chan internal.File, 20)
 		writer := internal.NewWriter(writerChan)
 
-		calculateChan := make(chan string, 100)
+		writer.InitDB()
+
+		totalCPUs := runtime.NumCPU()
+		calculateChan := make(chan string, totalCPUs)
 		calculator := internal.NewCalculator(calculateChan)
 
 		dispatcher := internal.NewDispatcher(*writer, *calculator)
 
-		for _, path := range paths {
+		wg.Add(1)
+		go calculator.Listen(calculateChan, writerChan, &wg)
+		wg.Add(1)
+		go writer.Listen(writerChan, &wg)
 
-			dispatcher.FindFiles(path)
-
-		}
+		dispatcher.FindFiles(paths)
+		wg.Wait()
 
 		after := time.Since(t)
 		internal.Logger.Info("clean-duplicates finished", slog.Any("runtime", after))
@@ -67,6 +73,7 @@ func init() {
 	// and all subcommands, e.g.:
 	searchCmd.PersistentFlags().StringArrayVar(&paths, "path", []string{}, "define paths")
 	searchCmd.PersistentFlags().BoolVarP(&ntfy, "notify", "n", false, "toggle ntfy")
+	searchCmd.PersistentFlags().BoolVar(&initNewDb, "initDb", false, "initialize new db")
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
 	// searchCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")

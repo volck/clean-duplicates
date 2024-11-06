@@ -19,7 +19,8 @@ var analyzeCmd = &cobra.Command{
 	Short: "A brief description of your command",
 	Run: func(cmd *cobra.Command, args []string) {
 		if listOpt {
-			duplicates := internal.GetDuplicates()
+			writer := internal.NewWriter(nil)
+			duplicates := writer.GetDuplicates()
 			duplicateInfoMsg := fmt.Sprintf("%s has %d duplicates in its database", internal.AppName, len(duplicates))
 			internal.Logger.Info(duplicateInfoMsg)
 			for _, duplicate := range duplicates {
