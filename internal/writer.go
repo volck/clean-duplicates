@@ -28,10 +28,10 @@ func (w *Writer) Listen(inChan <-chan File, wg *sync.WaitGroup) {
 		Logger.Error("could not open database", slog.Any("error", err))
 	}
 	Logger.Info("writer listening")
-	counter := 0
+	filecounter := 0
 	for file := range inChan {
-		counter++
-		Logger.Info("writer recieved file", slog.Any("file", file), slog.Int("counter", counter))
+		filecounter++
+		Logger.Info("writer got file", slog.Any("file", file), slog.Int("filecounter", filecounter))
 		exists, err := w.FileAlreadyChecked(db, file.FilePath)
 		if err != nil {
 			Logger.Error("could not check if file exists", slog.Any("error", err))
@@ -50,18 +50,10 @@ func (w *Writer) InitDB() {
 	db := w.makeDb()
 	Logger.Info("db stats", slog.Int("inuse", db.Stats().InUse), slog.Any("ping", db.Ping()))
 
-	// exec the schema or fail; multi-statement Exec behavior varies between
-	// database drivers;  pq will exec them all, sqlite3 won't, ymmv
-
 	_, err := db.Exec(Schema)
 	if err != nil {
 		Logger.Error("failed to exec", slog.Any("error", err))
 	}
-	res, err := db.Exec("PRAGMA table_info(files)")
-	if err != nil {
-		Logger.Error("could not describe files", slog.Any("error", err))
-	}
-	Logger.Info("describe files", slog.Any("res", res))
 }
 
 func (w *Writer) makeDb() (db *sqlx.DB) {
@@ -106,7 +98,7 @@ func (w *Writer) InsertFile(db *sqlx.DB, f *File) error {
 		Logger.Error("could not get rows affected", slog.Any("error", err))
 	}
 
-	Logger.Info("inserted file", slog.Any("rowsAffected", rowsAffected))
+	Logger.Info("inserted file", slog.Any("file", f.FilePath), slog.Any("rowsAffected", rowsAffected))
 	return err
 }
 
