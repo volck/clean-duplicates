@@ -38,7 +38,7 @@ func (d *Dispatcher) dispatchToCalculator(path string, info os.DirEntry, err err
 	}
 	if !info.IsDir() {
 		d.dispatched++
-		Logger.Info("dispatching to calculator", slog.Any("path", path), slog.Any("info", info), slog.Int("dispatched", d.dispatched))
+		Logger.Debug("dispatching to calculator", slog.Any("path", path), slog.Any("info", info), slog.Int("dispatched", d.dispatched))
 		d.calculator.CalculateChan <- path
 	}
 	return nil
