@@ -35,6 +35,6 @@ func (c *Calculator) CalculateHash(path string, outChan chan<- File, wg *sync.Wa
 		return
 	}
 	md5Hash := fmt.Sprintf("%x", *theHash)
-	f := File{FilePath: path, MD5Hash: md5Hash}
+	f := File{FilePath: path, Hash: md5Hash}
 	outChan <- f
 }

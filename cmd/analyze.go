@@ -24,7 +24,7 @@ var analyzeCmd = &cobra.Command{
 			duplicateInfoMsg := fmt.Sprintf("%s has %d duplicates in its database", internal.AppName, len(duplicates))
 			internal.Logger.Info(duplicateInfoMsg)
 			for _, duplicate := range duplicates {
-				internal.Logger.Info("found duplicate", slog.Any("path", duplicate.FilePath), slog.Any("hash", duplicate.MD5Hash))
+				internal.Logger.Info("found duplicate", slog.Any("path", duplicate.FilePath), slog.Any("hash", duplicate.Hash))
 			}
 		}
 	},

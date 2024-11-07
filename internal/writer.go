@@ -3,12 +3,17 @@ package internal
 import (
 	"database/sql"
 	"fmt"
+	sqlx "github.com/jmoiron/sqlx"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
+)
 
-	sqlx "github.com/jmoiron/sqlx"
+const (
+	flushCount  = 500
+	flushPeriod = 1 * time.Second
 )
 
 type Writer struct {
@@ -18,23 +23,6 @@ type Writer struct {
 func NewWriter(writerChan chan File) *Writer {
 	return &Writer{WriteChan: writerChan}
 
-}
-
-func (w *Writer) Listen(inChan <-chan File, wg *sync.WaitGroup) {
-	defer wg.Done()
-
-	db, err := w.OpenDb()
-	if err != nil {
-		Logger.Error("could not open database", slog.Any("error", err))
-	}
-	Logger.Info("writer listening")
-	filecounter := 0
-	for file := range inChan {
-		filecounter++
-		Logger.Info("writer got file", slog.Any("file", file), slog.Int("filecounter", filecounter))
-		w.InsertFile(db, &file)
-	}
-	Logger.Info("writer done")
 }
 
 func (w *Writer) InitDB() {
@@ -79,31 +67,76 @@ func (w *Writer) OpenDb() (*sqlx.DB, error) {
 	return db, err
 
 }
+func (w *Writer) Listen(inChan <-chan File, wg *sync.WaitGroup) {
+	defer wg.Done()
 
-func (w *Writer) InsertFile(db *sqlx.DB, f *File) error {
-	res, err := db.Exec("INSERT OR IGNORE INTO files (file_path, hash) VALUES (?, ?)", f.FilePath, f.MD5Hash)
+	db, err := w.OpenDb()
 	if err != nil {
-		Logger.Error("could not insert file", slog.Any("error", err))
-	}
-	rowsAffected, err := res.RowsAffected()
-	if err != nil {
-		Logger.Error("could not get rows affected", slog.Any("error", err))
+		Logger.Error("could not open database", slog.Any("error", err))
+		return
 	}
 
-	Logger.Info("inserted file", slog.Any("file", f.FilePath), slog.Any("rowsAffected", rowsAffected))
-	return err
+	Logger.Info("writer listening")
+
+	tx, err := db.Begin()
+	if err != nil {
+		Logger.Error("could not begin transaction", slog.Any("error", err))
+		return
+	}
+	stmt, err := tx.Prepare("INSERT OR IGNORE INTO files (file_path, hash) VALUES (?,?)")
+	if err != nil {
+		Logger.Error("could not prepare statement", slog.Any("error", err))
+		return
+	}
+	defer stmt.Close()
+
+	var files []File
+	ticker := time.NewTicker(flushPeriod)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case file, ok := <-inChan:
+			if !ok {
+				flushFiles(stmt, files)
+				err = tx.Commit()
+				if err != nil {
+					Logger.Error("commit failed", slog.Any("error", err))
+				}
+				Logger.Info("writer done")
+				return
+			}
+			files = append(files, file)
+			// Flush hvis bufferstørrelsen er nådd
+			if len(files) >= flushCount {
+				Logger.Info("flushing files", slog.Int("count", len(files)))
+				flushFiles(stmt, files)
+				files = nil
+			}
+		case <-ticker.C:
+			// Tidsbasert flush
+			if len(files) > 0 {
+				flushFiles(stmt, files)
+				files = nil
+			}
+		}
+	}
 }
+func flushFiles(stmt *sql.Stmt, files []File) {
+	for _, file := range files {
+		res, err := stmt.Exec(file.FilePath, file.Hash)
+		if err != nil {
+			Logger.Error("could not execute statement", slog.Any("error", err))
+		}
+		RowsAffected, err := res.RowsAffected()
+		if err != nil {
 
-func (w *Writer) FileAlreadyChecked(db *sqlx.DB, path string) (bool, error) {
-
-	query := "SELECT 1 FROM files WHERE file_path = ? LIMIT 1"
-
-	var exists bool
-	err := db.QueryRow(query, path).Scan(&exists)
-	if err == sql.ErrNoRows {
-		return false, nil
+			Logger.Error("could not get rows affected", slog.Any("error", err))
+		}
+		if RowsAffected > 0 {
+			Logger.Info("inserted", slog.Any("file_path", file.FilePath), slog.Any("RowsAffected", RowsAffected))
+		}
 	}
-	return exists, err
 }
 
 func (w *Writer) GetDuplicates() []File {

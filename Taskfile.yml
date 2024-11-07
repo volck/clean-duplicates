@@ -20,6 +20,12 @@ tasks:
       - go run . init 
 
 
+  run-search-test: 
+    desc: "Run the search subprogram without recreating testdata"
+    deps: [build]
+    cmds:
+      - go run . search --path testfolder/
+
   no-test-recreate-search-test:
     desc: "Run the search subprogram without recreating testdata"
     deps: [clean-db,run-init]

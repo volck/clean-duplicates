@@ -53,7 +53,7 @@ var searchCmd = &cobra.Command{
 		wg.Wait()
 
 		after := time.Since(t)
-		internal.Logger.Info("clean-duplicates finished", slog.Any("runtime", after))
+		internal.Logger.Info("clean-duplicates finished", slog.Any("runtime", after.Seconds()))
 		if ntfy {
 			ntfyTitle := fmt.Sprintf("%s completed search for files", internal.AppName)
 			tnow := time.Now()
