@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"database/sql"
 	"fmt"
 	sqlx "github.com/jmoiron/sqlx"
 	"log/slog"
@@ -83,12 +82,6 @@ func (w *Writer) Listen(inChan <-chan File, wg *sync.WaitGroup) {
 		Logger.Error("could not begin transaction", slog.Any("error", err))
 		return
 	}
-	stmt, err := tx.Prepare("INSERT OR IGNORE INTO files (file_path, hash) VALUES (?,?)")
-	if err != nil {
-		Logger.Error("could not prepare statement", slog.Any("error", err))
-		return
-	}
-	defer stmt.Close()
 
 	var files []File
 	ticker := time.NewTicker(flushPeriod)
@@ -98,7 +91,7 @@ func (w *Writer) Listen(inChan <-chan File, wg *sync.WaitGroup) {
 		select {
 		case file, ok := <-inChan:
 			if !ok {
-				flushFiles(stmt, files)
+				flushFiles(db, files)
 				err = tx.Commit()
 				if err != nil {
 					Logger.Error("commit failed", slog.Any("error", err))
@@ -110,32 +103,29 @@ func (w *Writer) Listen(inChan <-chan File, wg *sync.WaitGroup) {
 			// Flush hvis bufferstørrelsen er nådd
 			if len(files) >= flushCount {
 				Logger.Info("flushing files", slog.Int("count", len(files)))
-				flushFiles(stmt, files)
+				flushFiles(db, files)
 				files = nil
 			}
 		case <-ticker.C:
 			// Tidsbasert flush
 			if len(files) > 0 {
-				flushFiles(stmt, files)
+				flushFiles(db, files)
 				files = nil
 			}
 		}
 	}
 }
-func flushFiles(stmt *sql.Stmt, files []File) {
-	for _, file := range files {
-		res, err := stmt.Exec(file.FilePath, file.Hash)
-		if err != nil {
-			Logger.Error("could not execute statement", slog.Any("error", err))
-		}
-		RowsAffected, err := res.RowsAffected()
-		if err != nil {
+func flushFiles(db *sqlx.DB, files []File) {
 
-			Logger.Error("could not get rows affected", slog.Any("error", err))
-		}
-		if RowsAffected > 0 {
-			Logger.Info("inserted", slog.Any("file_path", file.FilePath), slog.Any("RowsAffected", RowsAffected))
-		}
+	res, err := db.NamedExec(`INSERT OR IGNORE INTO files (file_path, hash) VALUES (:file_path, :hash)`, files)
+
+	RowsAffected, err := res.RowsAffected()
+	if err != nil {
+
+		Logger.Error("could not get rows affected", slog.Any("error", err))
+	}
+	if RowsAffected > 0 {
+		Logger.Info("inserted", slog.Any("RowsAffected", RowsAffected))
 	}
 }
 
