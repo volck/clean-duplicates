@@ -170,3 +170,20 @@ func (w *Writer) DeleteDb() {
 	}
 	Logger.Info("deleted db")
 }
+
+func (w *Writer) GetAllFiles() []File {
+
+	db, err := OpenDb()
+	if err != nil {
+		Logger.Error("could not open database", slog.Any("error", err))
+	}
+	query := `SELECT * FROM files`
+
+	var files []File
+	err = db.Select(&files, query)
+	if err != nil {
+		Logger.Error("could not get duplicates", slog.Any("error", err))
+	}
+	return files
+
+}

@@ -27,6 +27,7 @@ func (d *Dispatcher) FindFiles(paths []string) {
 			fmt.Printf("Error walking the path %v: %v\n", path, err)
 		}
 	}
+
 	close(d.calculator.CalculateChan)
 }
 
@@ -38,6 +39,7 @@ func (d *Dispatcher) dispatchToCalculator(path string, info os.DirEntry, err err
 	}
 	if !info.IsDir() {
 		d.dispatched++
+		FilesFoundChan = FilesFoundChan + 1
 		Logger.Debug("dispatching to calculator", slog.Any("path", path), slog.Any("info", info), slog.Int("dispatched", d.dispatched))
 		d.calculator.CalculateChan <- path
 	}

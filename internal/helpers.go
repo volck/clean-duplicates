@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -13,7 +14,8 @@ var Logger = slog.New(slog.NewJSONHandler(os.Stdout, nil))
 var AppName = "clean-duplicates"
 var Wg sync.WaitGroup
 var Done = make(chan bool)
-var NumberOfFiles int
+var FilesFound int
+var FilesProcessed int
 
 func Ntfy(title string, msg string) {
 	ntfyEndPoint := os.Getenv("NTFY_URL")
@@ -39,4 +41,27 @@ func Ntfy(title string, msg string) {
 
 	}
 	Logger.Info("ntfy msg sent", slog.Any("msg", msg), slog.Any("response", resp.Body), slog.Any("status", resp.Status), slog.Any("status_code", resp.StatusCode))
+}
+
+func JSON(w http.ResponseWriter, status int, data any) error {
+	return JSONWithHeaders(w, status, data, nil)
+}
+
+func JSONWithHeaders(w http.ResponseWriter, status int, data any, headers http.Header) error {
+	js, err := json.MarshalIndent(data, "", "\t")
+	if err != nil {
+		return err
+	}
+
+	js = append(js, '\n')
+
+	for key, value := range headers {
+		w.Header()[key] = value
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	w.Write(js)
+
+	return nil
 }

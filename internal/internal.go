@@ -35,12 +35,14 @@ func walkFunc(path string, info os.DirEntry, err error) error {
 }
 
 func calculateHash(filePath string) (md5sum *[]byte, err error) {
+	Logger.Debug("Calculating hash for file", slog.String("file", filePath))
 	file, err := os.Open(filePath)
 	if err != nil {
 		Logger.Error("error opening file", slog.Any("error", err))
 		return
 	}
 
+	defer file.Close()
 	sha256Hash := sha256.New()
 	if _, err := io.Copy(io.MultiWriter(sha256Hash), file); err != nil {
 		Logger.Error("io copy on calculateHash failed", slog.Any("err", err))
