@@ -23,7 +23,7 @@ func TestWorkFlow(t *testing.T) {
 
 	paths := []string{"/home/a01631/dev/clean-duplicates/testfolder/"}
 	wg.Add(1)
-	go calculator.Listen(calculateChan, writerChan, &wg)
+	go calculator.Listen(calculateChan, writerChan, &wg, 5)
 	internal.Logger.Info("calculator started. we're starting writer")
 	wg.Add(1)
 	go writer.Listen(writerChan, &wg)

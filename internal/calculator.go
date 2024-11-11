@@ -15,17 +15,23 @@ func NewCalculator(thechan chan string) *Calculator {
 	return &Calculator{CalculateChan: thechan}
 }
 
-func (c *Calculator) Listen(inChan chan<- string, outChan chan<- File, cache map[string]bool, wg *sync.WaitGroup) {
+func (c *Calculator) Listen(inChan chan<- string, outChan chan<- File, cache map[string]bool, wg *sync.WaitGroup, maxConcurrentTasks int) {
 	defer wg.Done()
 	Logger.Info("calculator listening")
 	var calculateWg sync.WaitGroup
+	semaphore := make(chan struct{}, maxConcurrentTasks)
+
 	for ch := range c.CalculateChan {
 		if _, ok := cache[ch]; ok {
 			Logger.Info("skipping", slog.Any("path", ch), slog.Any("hash", cache[ch]))
 			continue
 		}
 		calculateWg.Add(1)
-		go c.CalculateHash(ch, outChan, &calculateWg)
+		semaphore <- struct{}{} // Acquire a slot
+		go func(ch string) {
+			defer func() { <-semaphore }() // Release the slot
+			c.CalculateHash(ch, outChan, &calculateWg)
+		}(ch)
 	}
 	calculateWg.Wait()
 	close(outChan)

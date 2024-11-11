@@ -10,6 +10,6 @@ mkdir testfolder
 for i in $(seq $NUMFILES); do
   echo "[$i/$NUMFILES]"
   size=$((RANDOM % 10 + 1))
-  dd if=/dev/urandom of=testfolder/$(uuidgen) bs=100M count=$size
+  dd if=/dev/urandom of=testfolder/$(uuidgen) bs=10M count=$size
 done
 

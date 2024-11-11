@@ -56,7 +56,7 @@ var searchCmd = &cobra.Command{
 		}
 
 		wg.Add(1)
-		go calculator.Listen(calculateChan, writerChan, cache, &wg)
+		go calculator.Listen(calculateChan, writerChan, cache, &wg, 10)
 		wg.Add(1)
 		go writer.Listen(writerChan, &wg)
 
